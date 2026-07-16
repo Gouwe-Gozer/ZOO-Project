@@ -2,7 +2,7 @@
 #
 # Author : Gérald FENOY
 #
-# Copyright 2023-2024 GeoLabs SARL. All rights reserved.
+# Copyright 2023-2026 GeoLabs SARL. All rights reserved.
 # 
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
@@ -24,10 +24,14 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
+
 import zoo
 import jwt
 import sys
 import json
+import os
+import redis
+import requests
 
 def addHeader(conf,name):
     if "headers" not in conf:
@@ -38,22 +42,154 @@ def addHeader(conf,name):
             key="Also-"+key
     conf["headers"]["X-"+key]=name
 
+class JWTSecurityService:
+
+    @staticmethod
+    def _get_env(name: str, default: str | None = None, required: bool = False) -> str:
+        value = os.environ.get(name, default)
+        if required and not value:
+            zoo.debug(f"Missing required environment variable: {name}")
+            return name
+        return value
+
+    def __init__(self, conf):
+        self.conf = conf
+        self.KEYCLOAK_ISSUER = self._get_env("ZOO_KEYCLOAK_ISSUER", required=True)
+        self.JWKS_URL = f"{self.KEYCLOAK_ISSUER.rstrip('/')}/protocol/openid-connect/certs"
+        self.EXPECTED_AUDIENCE = self._get_env("ZOO_KEYCLOAK_AUDIENCE", required=True)
+        configured_algorithms = self._get_env("ZOO_KEYCLOAK_ALGORITHMS", default="RS256")
+        self.JWT_ALGORITHMS = [a.strip() for a in configured_algorithms.split(",") if a.strip()]
+        if not self.JWT_ALGORITHMS:
+            self.JWT_ALGORITHMS = ["RS256"]
+
+        self.REDIS_HOST = self._get_env("ZOO_REDIS_HOST", default="redis")
+        self.REDIS_PORT = int(self._get_env("ZOO_REDIS_PORT", default="6379"))
+        self.REDIS_DB = int(self._get_env("ZOO_REDIS_DB", default="0"))
+
+        self.CACHE_KEY = self._get_env("ZOO_KEYCLOAK_JWKS_CACHE_KEY", default="zoo:keycloak:jwks")
+        self.CACHE_TTL = int(self._get_env("ZOO_KEYCLOAK_JWKS_CACHE_TTL", default="3600"))
+
+        self._redis_client = None
+
+    def get_redis_client(self) -> redis.Redis:
+        if self._redis_client is None:
+            self._redis_client = redis.Redis(
+                host=self.REDIS_HOST,
+                port=self.REDIS_PORT,
+                db=self.REDIS_DB,
+                socket_connect_timeout=2,
+                socket_timeout=2,
+            )
+        return self._redis_client
+
+    def _fetch_jwks(self) -> dict:
+        resp = requests.get(self.JWKS_URL, timeout=5)
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as e:
+            zoo.debug(f"Failed to fetch JWKS from {self.JWKS_URL}: {e}")
+            return {}
+        return resp.json()
+
+    def get_jwks(self, force_refresh: bool = False) -> dict:
+        r = self.get_redis_client()
+
+        if not force_refresh:
+            try:
+                cached = r.get(self.CACHE_KEY)
+                if cached:
+                    return json.loads(cached)
+            except redis.RedisError:
+                zoo.debug("Redis unavailable, fetching JWKS directly")
+                pass
+
+        jwks = self._fetch_jwks()
+        try:
+            r.setex(self.CACHE_KEY, self.CACHE_TTL, json.dumps(jwks))
+        except redis.RedisError:
+            zoo.debug("Redis unavailable, unable to cache JWKS")
+            pass
+
+        return jwks
+
+    def decode_token(self, cJWT: str) -> dict:
+        unverified_header = jwt.get_unverified_header(cJWT)
+        kid = unverified_header.get("kid")
+        if kid is None:
+            zoo.debug("No 'kid' found in JWT header")
+            return None
+
+        jwks = self.get_jwks()
+        key_data = next((k for k in jwks["keys"] if k["kid"] == kid), None)
+
+        if key_data is None:
+            jwks = self.get_jwks(force_refresh=True)
+            key_data = next((k for k in jwks["keys"] if k["kid"] == kid), None)
+            if key_data is None:
+                zoo.error(f"Key with kid={kid} not found in JWKS after refresh")
+                return None
+
+        signing_key = jwt.PyJWK(key_data)
+
+        return jwt.decode(
+            cJWT,
+            signing_key.key,
+            algorithms=self.JWT_ALGORITHMS,
+            audience=self.EXPECTED_AUDIENCE,
+            issuer=self.KEYCLOAK_ISSUER,
+            options={
+                "verify_signature": True,
+                "verify_aud": True,
+                "verify_iss": True,
+                "verify_exp": True,
+            },
+        )
+
 def securityIn(main_conf,inputs,outputs):
     if "servicesNamespace" in main_conf and "debug" in main_conf["servicesNamespace"]:
         zoo.info("JWT securityIn!")
     addHeader(main_conf,"jwt.securityIn")
     hasAuth=False
     for i in main_conf["renv"].keys():
-        if i.count("HTTP_AUTHORIZATION")>0:
+        if "HTTP_AUTHORIZATION" in i:
             zoo.info("HTTP Authorization header found")
             sToken=main_conf["renv"][i].split(' ')[1]
             if sToken.count(".")>=2:
-                zoo.info("JWT token found")
+                zoo.info("JWT token found") 
                 cJWT=main_conf["renv"][i].split(' ')[1]
                 if "osecurity" in main_conf and "realm" in main_conf["osecurity"]:
                     if main_conf["renv"][i].count("oidc/"+main_conf["osecurity"]["realm"]+"/")>0:
                         cJWT=cJWT.replace("oidc/"+main_conf["osecurity"]["realm"]+"/","")
-                jsonObj=jwt.decode(cJWT, options={"verify_signature": False,"verify_aud": False})
+                try:
+                    if os.getenv("ZOO_INSECURE_JWT", "false").lower() == "true":
+                        jsonObj=jwt.decode(cJWT, options={"verify_signature": False,"verify_aud": False})
+                    else:
+                        jsonDecoder = JWTSecurityService(main_conf)
+                        jsonObj=jsonDecoder.decode_token(cJWT)
+                        #jsonObj = decode_jwt(cJWT)
+                except Exception as e:
+                    zoo.error(f"JWT decoding error: {e}")
+                    if "lenv" not in main_conf:
+                        main_conf["lenv"] = {}
+                    main_conf["lenv"]["message"]=zoo._("Invalid JWT token (jwt.securityIn).")
+                    main_conf["lenv"]["code"]="Unauthorized"
+                    main_conf["lenv"]["status"]="401 Unauthorized"
+                    if "headers" in main_conf:
+                        main_conf["headers"]["status"]="401 Unauthorized"
+                    else:
+                        main_conf["headers"]={"status":"401 Unauthorized"}
+                    return zoo.SERVICE_FAILED
+                if jsonObj is None:
+                    if "lenv" not in main_conf:
+                        main_conf["lenv"] = {}
+                    main_conf["lenv"]["message"]=zoo._("Invalid JWT token (jwt.securityIn).")
+                    main_conf["lenv"]["code"]="Unauthorized"
+                    main_conf["lenv"]["status"]="401 Unauthorized"
+                    if "headers" in main_conf:
+                        main_conf["headers"]["status"]="401 Unauthorized"
+                    else:
+                        main_conf["headers"]={"status":"401 Unauthorized"}
+                    return zoo.SERVICE_FAILED
                 hasAuth=True
                 myKeys=list(jsonObj.keys())
                 for k in jsonObj.keys():
@@ -84,7 +220,6 @@ def securityIn(main_conf,inputs,outputs):
                     main_conf["lenv"] = {}
                 main_conf["lenv"]["json_user"]=json.dumps(jsonObj)
             else:
-                import requests
                 if "osecurity" in main_conf and \
                    "userinfoUrl" not in main_conf["osecurity"]:
                     import base64

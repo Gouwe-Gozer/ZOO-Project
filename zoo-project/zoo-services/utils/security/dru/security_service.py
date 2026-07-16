@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 ###############################################################################
 #  Author:   Gérald Fenoy, gerald.fenoy@geolabs.fr
-#  Copyright (c) 2020-2025, GeoLabs SARL.
+#  Copyright (c) 2020-2026, GeoLabs SARL.
 ############################################################################### 
 #  Permission is hereby granted, free of charge, to any person obtaining a
 #  copy of this software and associated documentation files (the "Software"),
@@ -161,14 +161,49 @@ def runDismiss(conf,inputs,outputs):
     return zoo.SERVICE_SUCCEEDED
 
 def browse(conf,inputs,outputs):
-    import sys
+    import os
+
+    user_namespace = None
     for key in conf["renv"]:
-        if key.count("SERVICES_NAMESPACE")!=0:
-            f=open(conf["servicesNamespace"]["path"]+"/"+conf["renv"][key]+"/temp/"+inputs["directory"]["value"],"r", encoding="utf-8")
-            if f is not None:
-                if "result" not in outputs:
-                    outputs["result"]={}
-            outputs["result"]["value"]=f.read()
-            return zoo.SERVICE_SUCCEEDED
-    conf["lenv"]["message"]="Unable to access the file"
+        if "SERVICES_NAMESPACE" in key:
+            user_namespace = conf["renv"][key]
+            break
+
+    if user_namespace is None:
+        conf["lenv"]["message"] = "Unable to resolve user namespace"
+        return zoo.SERVICE_FAILED
+
+    if "directory" not in inputs or "value" not in inputs["directory"]:
+        conf["lenv"]["message"] = "Missing directory input"
+        return zoo.SERVICE_FAILED
+
+    requested_path = inputs["directory"]["value"]
+    if "\x00" in requested_path:
+        conf["lenv"]["message"] = "Invalid path"
+        return zoo.SERVICE_FAILED
+
+    base_temp_dir = os.path.realpath(
+        os.path.join(conf["servicesNamespace"]["path"], user_namespace, "temp")
+    )
+    target_path = os.path.realpath(os.path.join(base_temp_dir, requested_path))
+
+    try:
+        if os.path.commonpath([base_temp_dir, target_path]) != base_temp_dir:
+            conf["lenv"]["message"] = "Access denied"
+            return zoo.SERVICE_FAILED
+    except ValueError:
+        conf["lenv"]["message"] = "Access denied"
+        return zoo.SERVICE_FAILED
+
+    if not os.path.isfile(target_path):
+        conf["lenv"]["message"] = "Unable to access the file"
+        return zoo.SERVICE_FAILED
+
+    with open(target_path, "r", encoding="utf-8") as f:
+        if "result" not in outputs:
+            outputs["result"] = {}
+        outputs["result"]["value"] = f.read()
+        return zoo.SERVICE_SUCCEEDED
+
+    conf["lenv"]["message"] = "Unable to access the file"
     return zoo.SERVICE_FAILED

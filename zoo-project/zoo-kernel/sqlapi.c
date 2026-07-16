@@ -387,9 +387,22 @@ void recordStoredFile(maps* pmsConf,const char* pccFileName,const char* pccType,
   map *pmSchema=getMapFromMaps(pmsConf,"database","schema");
   char *pcaSqlQuery=(char*)malloc((strlen(pmSchema->value)+strlen(pmUsid->value)+strlen(pccFileName)+strlen(pccType)+(pccName!=NULL?strlen(pccName):2)+68+1)*sizeof(char));
   if(pccName!=NULL)
-    sprintf(pcaSqlQuery,"INSERT INTO %s.files (uuid,filename,nature,name) VALUES ('%s','%s','%s','%s');",pmSchema->value,pmUsid->value,pccFileName,pccType,pccName);
+    sprintf(pcaSqlQuery,
+            "INSERT INTO %s.files (uuid,filename,nature,name) "
+            "VALUES ('%s','%s','%s','%s');",
+            pmSchema->value,
+            pmUsid->value,
+            pccFileName,
+            pccType,
+            pccName);
   else
-    sprintf(pcaSqlQuery,"INSERT INTO %s.files (uuid,filename,nature,name) VALUES ('%s','%s','%s',NULL);",pmSchema->value,pmUsid->value,pccFileName,pccType);
+    sprintf(pcaSqlQuery,
+            "INSERT INTO %s.files (uuid,filename,nature,name) "
+            "VALUES ('%s','%s','%s',NULL);",
+            pmSchema->value,
+            pmUsid->value,
+            pccFileName,
+            pccType);
   verifyDbConnection(pmsConf,iZooDsNb,iCreated);
   execSql(pmsConf,iZooDsNb-1,pcaSqlQuery);
   free(pcaSqlQuery);
@@ -669,8 +682,18 @@ int _updateStatus(maps* pmsConf){
   map *pmStatus=getMapFromMaps(pmsConf,"lenv","status");
   map *pmMessage=getMapFromMaps(pmsConf,"lenv","message");
   map *pmSchema=getMapFromMaps(pmsConf,"database","schema");
-  char *pcaSqlQuery=(char*)malloc((strlen(pmSchema->value)+strlen(pmMessage->value)+strlen(pmStatus->value)+strlen(pmUsid->value)+81+1)*sizeof(char));
-  sprintf(pcaSqlQuery,"UPDATE %s.services set status=$$%s$$,message=$$%s$$,updated_time=now() where uuid=$$%s$$;",pmSchema->value,pmStatus->value,pmMessage->value,pmUsid->value);
+  char *pcaSqlQuery=(char*)malloc((strlen(pmSchema->value)+
+                                  strlen(pmMessage->value)+
+                                  strlen(pmStatus->value)+
+                                  strlen(pmUsid->value)+
+                                  81+1)*sizeof(char));
+  sprintf(pcaSqlQuery,"UPDATE %s.services set "
+                      "status=$$%s$$,message=$$%s$$,updated_time=now() "
+                      "where uuid=$$%s$$;",
+                      pmSchema->value,
+                      pmStatus->value,
+                      pmMessage->value,
+                      pmUsid->value);
   verifyDbConnection(pmsConf,iZooDsNb,iCreated);
   execSql(pmsConf,iZooDsNb-1,pcaSqlQuery);
   cleanUpResultSet(pmsConf,iZooDsNb-1);
@@ -693,8 +716,14 @@ char* _getStatus(maps* pmsConf,char* pcPid){
   int iZooDsNb=getCurrentId(pmsConf);
   int iCreated=-1;
   map *pmSchema=getMapFromMaps(pmsConf,"database","schema");
-  char *pcaSqlQuery=(char*)malloc((strlen(pmSchema->value)+strlen(pcPid)+104+1)*sizeof(char));
-  sprintf(pcaSqlQuery,"select CASE WHEN message is null THEN '-1' ELSE status||'|'||message END from %s.services where uuid=$$%s$$;",pmSchema->value,pcPid);
+  char *pcaSqlQuery=(char*)malloc((strlen(pmSchema->value)+
+                                  strlen(pcPid)+
+                                  104+1)*sizeof(char));
+  sprintf(pcaSqlQuery,"select "
+                      "CASE WHEN message is null THEN '-1' ELSE status||'|'||message END "
+                      "from %s.services where uuid=$$%s$$;",
+                      pmSchema->value,
+                      pcPid);
   verifyDbConnection(pmsConf,iZooDsNb,iCreated);
   execSql(pmsConf,iZooDsNb-1,pcaSqlQuery);
   OGRFeature  *poFeature = NULL;
@@ -730,14 +759,31 @@ char* _getStatusField(maps* pmsConf,char* pcPid,const char* field){
   char *pcaSqlQuery=NULL;
   if(strstr(field,"_time")!=NULL){
     pcaSqlQuery=(char*)malloc((strlen(pmSchema->value)+strlen(pcPid)+strlen(field)+strlen(field)+99+1)*sizeof(char));
-    sprintf(pcaSqlQuery,"select CASE WHEN %s is null THEN '-1' ELSE display_date_rfc3339(%s) END from %s.services where uuid=$$%s$$;",field,field,pmSchema->value,pcPid);
+    sprintf(pcaSqlQuery,"select "
+                        "CASE WHEN %s is null THEN '-1' ELSE display_date_rfc3339(%s) END "
+                        "from %s.services where uuid=$$%s$$;",
+                        field,field,pmSchema->value,pcPid);
   }else{
     if(strstr(field,"itype")!=NULL){
-      pcaSqlQuery=(char*)malloc((strlen(pmSchema->value)+strlen(pcPid)+(2*strlen(field))+strlen(field)+136+1)*sizeof(char));
-      sprintf(pcaSqlQuery,"select CASE WHEN %s is null  THEN 'unknown' ELSE CASE WHEN %s = 'json' THEN 'process' ELSE 'unknown' END END from %s.services where uuid=$$%s$$;",field,field,pmSchema->value,pcPid);
+      pcaSqlQuery=(char*)malloc((strlen(pmSchema->value)+
+                                strlen(pcPid)+
+                                (2*strlen(field))+
+                                strlen(field)+
+                                136+1)*sizeof(char));
+      sprintf(pcaSqlQuery,"select "
+                          "CASE WHEN %s is null  THEN 'unknown' ELSE CASE WHEN %s = 'json' THEN 'process' ELSE 'unknown' END END "
+                          "from %s.services where uuid=$$%s$$;",
+                          field,field,pmSchema->value,pcPid);
     }else{
-      pcaSqlQuery=(char*)malloc((strlen(pmSchema->value)+strlen(pcPid)+strlen(field)+strlen(field)+83+1)*sizeof(char));
-      sprintf(pcaSqlQuery,"select CASE WHEN %s is null THEN '-1' ELSE %s::text END from %s.services where uuid=$$%s$$;",field,field,pmSchema->value,pcPid);
+      pcaSqlQuery=(char*)malloc((strlen(pmSchema->value)+
+                                strlen(pcPid)+
+                                strlen(field)+
+                                strlen(field)+
+                                83+1)*sizeof(char));
+      sprintf(pcaSqlQuery,"select "
+                          "CASE WHEN %s is null THEN '-1' ELSE %s::text END "
+                          "from %s.services where uuid=$$%s$$;",
+                          field,field,pmSchema->value,pcPid);
     }
   }
   verifyDbConnection(pmsConf,iZooDsNb,iCreated);
@@ -942,8 +988,13 @@ int isRunning(maps* pmsConf,char* pcPid){
   int iZooDsNb=getCurrentId(pmsConf);
   int iCreated=-1;
   map *pmSchema=getMapFromMaps(pmsConf,"database","schema");
-  char *pcaSqlQuery=(char*)malloc((strlen(pmSchema->value)+strlen(pcPid)+73+1)*sizeof(char));
-  sprintf(pcaSqlQuery,"select count(*) as t from %s.services where uuid=$$%s$$ and end_time is null;",pmSchema->value,pcPid);
+  char *pcaSqlQuery=(char*)malloc((strlen(pmSchema->value)+
+                                  strlen(pcPid)+
+                                  73+1)*sizeof(char));
+  sprintf(pcaSqlQuery,"select count(*) as t "
+                      "from %s.services "
+                      "where uuid=$$%s$$ and end_time is null;",
+                      pmSchema->value,pcPid);
   verifyDbConnection(pmsConf,iZooDsNb,iCreated);
   execSql(pmsConf,iZooDsNb-1,pcaSqlQuery);
   OGRFeature  *poFeature = NULL;

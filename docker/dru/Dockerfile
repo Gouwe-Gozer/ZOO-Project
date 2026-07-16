@@ -291,6 +291,8 @@ RUN date && mkdir /tmp/cookiecutter-templates && \
     cd /tmp && \
     pip install --upgrade setuptools cryptography PyJWT pip zipp "kubernetes==35.0.0" && \
     pip install  "urllib3>=2.6.3" "jaraco.context>=6.1.0" "pyasn1>=0.6.2" "oauthlib>=3.2.2" "wheel>=0.46.2" && \
+    pip uninstall -y chardet || true && \
+    pip install --force-reinstall --no-binary charset-normalizer charset-normalizer==3.4.9 && \
     # cd .. && \
     rm -r pycalrissian /tmp/requirements.txt && \
     chmod -R 777 /tmp/cookiecutter-templates && \

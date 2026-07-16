@@ -1,11 +1,17 @@
 Version 2.1.1-dev
+  * Fix arbitrary file read via path traversal in DRU browse operation.
+  * Fix Authentication bypass by ensuring JWT are properly verified at runtime,
+  for debuging purposes, you can set the ZOO_INSECURE_JWT environment variable
+  to true to avoid verification.
+  * Fix SQL injection via job identifier on the /jobs/{jobId} endpoint, use the
+  isValidUuid to ensure the jobid is in proper format.
   * Add support for openeo-process-list on /processes with the profile 
   request parameter.
   * Define list of not allowed content for identifiers created from the CWL.
   * Avoid potential SQL injection from deploy_util.py and UndeployProcess.py.
-  * Enhance internal log message management, relying on ZOO_DEBUG_LEVEL
-  * value.
-  * Add basic QOS to rabbitmq setting prefetch count to 1.
+  * Enhance internal log message management, relying on the ZOO_DEBUG_LEVEL
+  * environement variable value.
+  * Add basic QOS to RabbitMQ setting prefetch count to 1.
   * Do not preserve database connection open during process execution,
   add functions: verifyDbConnection and closeIfNeeded.
   * Add a basic Notify process for DRU operations.

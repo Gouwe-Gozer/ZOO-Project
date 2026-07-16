@@ -34,6 +34,36 @@
 int iZooLogLevel=1;
 int iMinZooLogLevel=0;
 
+
+/**
+ * Verify if a string is a valid UUID in the standard format:
+ * xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 characters, including hyphens)
+ *
+ * @param pccUuid the string to validate (must be non-NULL and null-terminated)
+ * @return 1 if the format is valid, 0 otherwise
+ */
+int isValidUuid(const char *pccUuid) {
+  if (pccUuid == NULL) {
+    return 0;
+  }
+  size_t len = strlen(pccUuid);
+  if (len != 36) {
+    return 0;
+  }
+  for (size_t i = 0; i < len; i++) {
+    if (i == 8 || i == 13 || i == 18 || i == 23) {
+      if (pccUuid[i] != '-') {
+        return 0;
+      }
+    } else {
+      if (!isxdigit((unsigned char)pccUuid[i])) {
+        return 0;
+      }
+    }
+  }
+  return 1;
+}
+
 /**
  * Set the minimum log level for ZOO-Kernel
  *

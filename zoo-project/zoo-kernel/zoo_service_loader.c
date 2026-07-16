@@ -3305,6 +3305,31 @@ int runRequest(map** inputs) {
         if(strlen(pcTmp)>6){
           // DELETE /jobs/{jobId}
           char* jobId=zStrdup(pcTmp+6);
+          if(isValidUuid(jobId)==0){
+            map* error=createMap("code","NoSuchJob");
+            addToMap(error,"message",_("The JobID from the request is not valid."));
+            localPrintExceptionJ(&pmsaConfig,error);
+            free(jobId);
+            freeMap(&error);
+            free (error);
+            json_object_put(res);
+            free(pcaCgiQueryString);
+            map* pmTest=getMap(request_inputs,"shouldFree");
+            if(pmTest!=NULL){
+              freeMap (inputs);
+              free (*inputs);
+              *inputs=NULL;
+              freeMap(&r_inputs);
+              free (r_inputs);
+              r_inputs=NULL;
+            }
+#ifdef RELY_ON_DB
+            cleanUpSql(pmsaConfig);
+#endif
+            freeMaps(&pmsaConfig);
+            free(pmsaConfig);
+            return 1;
+          }
           setMapInMaps(pmsaConfig,"lenv","gs_usid",jobId);
           char* pcaStatusFilePath=json_getStatusFilePath(pmsaConfig);
           setMapInMaps(pmsaConfig,"lenv","file.statusFile",pcaStatusFilePath);
@@ -3380,6 +3405,30 @@ int runRequest(map** inputs) {
             if(strlen(jobId)==36){
               if(res!=NULL)
                 json_object_put(res);
+              if(isValidUuid(jobId)==0){
+                map* error=createMap("code","NoSuchJob");
+                addToMap(error,"message",_("The JobID from the request is not valid."));
+                localPrintExceptionJ(&pmsaConfig,error);
+                free(jobId);
+                freeMap(&error);
+                free (error);
+                free(pcaCgiQueryString);
+                map* pmTest=getMap(request_inputs,"shouldFree");
+                if(pmTest!=NULL){
+                  freeMap (inputs);
+                  free (*inputs);
+                  *inputs=NULL;
+                  freeMap(&r_inputs);
+                  free (r_inputs);
+                  r_inputs=NULL;
+                }
+#ifdef RELY_ON_DB
+                cleanUpSql(pmsaConfig);
+#endif
+                freeMaps(&pmsaConfig);
+                free(pmsaConfig);
+                return 1;
+              }
               ensureFiltered(&pmsaConfig,"out");
               prepareLinksHeader(pmsaConfig,"/jobs/{jobID}");
               res=printJobStatus(&pmsaConfig,jobId);
@@ -3390,6 +3439,56 @@ int runRequest(map** inputs) {
               char* pcaEndUrl=zStrdup(jobId);
               if(strlen(jobId)>36)
                 jobId[36]=0;
+              if(isValidUuid(jobId)==0){
+                map* error=createMap("code","NoSuchJob");
+                addToMap(error,"message",_("The JobID from the request is not valid."));
+                localPrintExceptionJ(&pmsaConfig,error);
+                free(jobId);
+                freeMap(&error);
+                free (error);
+                json_object_put(res);
+                free(pcaCgiQueryString);
+                map* pmTest=getMap(request_inputs,"shouldFree");
+                if(pmTest!=NULL){
+                  freeMap (inputs);
+                  free (*inputs);
+                  *inputs=NULL;
+                  freeMap(&r_inputs);
+                  free (r_inputs);
+                  r_inputs=NULL;
+                }
+#ifdef RELY_ON_DB
+                cleanUpSql(pmsaConfig);
+#endif
+                freeMaps(&pmsaConfig);
+                free(pmsaConfig);
+                return 1;
+              }
+              if(strncasecmp(pcaEndUrl+36,"/results",8)!=0){
+                map* error=createMap("code","BadRequest");
+                addToMap(error,"message",_("The resource is not available"));
+                localPrintExceptionJ(&pmsaConfig,error);
+                free(jobId);
+                freeMap(&error);
+                free (error);
+                json_object_put(res);
+                free(pcaCgiQueryString);
+                map* pmTest=getMap(request_inputs,"shouldFree");
+                if(pmTest!=NULL){
+                  freeMap (inputs);
+                  free (*inputs);
+                  *inputs=NULL;
+                  freeMap(&r_inputs);
+                  free (r_inputs);
+                  r_inputs=NULL;
+                }
+#ifdef RELY_ON_DB
+                cleanUpSql(pmsaConfig);
+#endif
+                freeMaps(&pmsaConfig);
+                free(pmsaConfig);
+                return 1;
+              }
               char *sid=getStatusId(pmsaConfig,jobId);
               if(sid==NULL){
                 map* error=createMap("code","NoSuchJob");
@@ -4548,7 +4647,6 @@ int runRequest(map** inputs) {
         }else{
           char* cIdentifier=NULL;
           if(strstr(pcaCgiQueryString,"/processes/")!=NULL){
-            ZOO_DEBUG(" /processes/{processId}");
 
             int len0=strlen(strstr(pcaCgiQueryString,"/processes/")+11);
             int len1=strlen(pcaCgiQueryString)-strlen(strstr(pcaCgiQueryString,"/job"));
