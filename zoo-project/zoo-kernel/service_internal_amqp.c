@@ -345,7 +345,14 @@ int bind_amqp(){
     _socket = NULL;
     return status;
   }
-  amqp_rpc_reply_t s = amqp_login(conn, "/", 0, 131072, 0, AMQP_SASL_METHOD_PLAIN, amqp_user, amqp_passwd);
+  amqp_rpc_reply_t s = amqp_login(conn,
+                                  "/",
+                                  0,
+                                  131072,
+                                  AMQP_HEARTBEAT_SECONDS,
+                                  AMQP_SASL_METHOD_PLAIN,
+                                  amqp_user,
+                                  amqp_passwd);
   if (s.reply_type != AMQP_RESPONSE_NORMAL){
     ZOO_ERROR("amqp_login failed");
     log_amqp_error("bind_amqp/amqp_login", s);
