@@ -1,5 +1,5 @@
 #
-# Author : Blasco Brauzzi, Fabrice Brito, Frank Löschau
+# Author : Blasco Brauzzi, Fabrice Brito, Frank Löschau, Gérald Fenoy
 #
 # Copyright 2023-2026 Terradue. All rights reserved.
 #
@@ -156,6 +156,25 @@ class Process:
                 raise ValueError(msg)
         return True
 
+    @staticmethod
+    def _metadata_local_name(value):
+        if not isinstance(value, str):
+            return value
+        if value.startswith(("http://", "https://")):
+            value = value.rstrip("/#")
+            return re.split(r"[/#]", value)[-1]
+        if ":" in value:
+            return value.split(":", 1)[1]
+        return value
+
+    @staticmethod
+    def _metadata_href_value(value):
+        if isinstance(value, dict):
+            if "value" in value:
+                return value["value"]
+            return json.dumps(value, sort_keys=True)
+        return value
+
 
     def write_zcfg(self, stream):
         """
@@ -222,14 +241,15 @@ class Process:
                                     print("    "+srname+" = @context")
                                     print("    "+shname+" = https://schema.org")
                                     print("    "+srname1+" = @type")
-                                    print("    "+shname1+" = "+self.metadata[item][icnt][subitem].split(":")[1])
+                                    print(
+                                        "    "+shname1+" = "+self._metadata_local_name(self.metadata[item][icnt][subitem])
+                                    )
                                     dcnt+=1
                                 else:
-                                    if subitem.count(":")>0:
-                                        print("    "+srname+" = "+subitem.split(":")[1])
-                                    else:
-                                        print("    "+srname+" = "+subitem)
-                                    print("    "+shname+" = "+self.metadata[item][icnt][subitem])
+                                    print("    "+srname+" = "+self._metadata_local_name(subitem))
+                                    print(
+                                        "    "+shname+" = "+str(self._metadata_href_value(self.metadata[item][icnt][subitem]))
+                                    )
                                 dcnt+=1
                         print("    "+rname+"_length = "+str(dcnt))
             print("    length = "+str(cnt))
@@ -413,10 +433,8 @@ class Process:
                                         "VALUES (%s,%s,%s,%s)",
                                          ("@context", "https://schema.org", metadata_id[0], icnt,)
                                     )
-                                    type_value = (
-                                        self.metadata[item][icnt][subitem].split(":")[1]
-                                        if self.metadata[item][icnt][subitem].count(":") > 0
-                                        else self.metadata[item][icnt][subitem]
+                                    type_value = self._metadata_local_name(
+                                        self.metadata[item][icnt][subitem]
                                     )
                                     cur.execute(
                                         "INSERT INTO CollectionDB.ows_Metadata (role,href,pid,index) "
@@ -424,15 +442,16 @@ class Process:
                                         ("@type", type_value, metadata_id[0], icnt,)
                                     )
                                 else:
-                                    role_value = (
-                                        subitem.split(":")[1]
-                                        if subitem.count(":") > 0
-                                        else subitem
-                                    )
+                                    role_value = self._metadata_local_name(subitem)
                                     cur.execute(
                                         "INSERT INTO CollectionDB.ows_Metadata (role,href,pid,index) "
                                         "VALUES (%s,%s,%s,%s)",
-                                        (role_value, self.metadata[item][icnt][subitem], metadata_id[0], icnt,)
+                                        (
+                                            role_value,
+                                            self._metadata_href_value(self.metadata[item][icnt][subitem]),
+                                            metadata_id[0],
+                                            icnt,
+                                        )
                                     )
 
         # Inputs handling
@@ -577,7 +596,7 @@ class Process:
     def sql_add_metadata(self, cur, metadata_object):
         cur.execute(
             "INSERT INTO CollectionDB.ows_Metadata (title,href) VALUES (%s,%s);",
-            (metadata_object["title"], metadata_object["value"],)
+            (metadata_object["title"], self._metadata_href_value(metadata_object["value"]),)
         )
         cur.execute(
             "INSERT INTO CollectionDB.DescriptionsMetadataAssignment (descriptions_id,metadata_id) "
