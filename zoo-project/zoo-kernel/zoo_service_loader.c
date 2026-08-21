@@ -4761,7 +4761,7 @@ int runRequest(map** inputs) {
           }
         }
         if(getMapFromMaps(pmsaConfig,"lenv","no-content")==NULL){
-          printf(pmResponseObject->value);
+          printf("%s",pmResponseObject->value);
           printf("\n");
         }
         fflush(stdout);
