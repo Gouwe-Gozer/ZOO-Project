@@ -23,8 +23,10 @@
 # THE SOFTWARE.
 
 mkdir -p /tmp/zTmp/statusInfos
+chmod 0777 /tmp/zTmp
+chown www-data:www-data /tmp/zTmp/statusInfos
 
-CMD="curl -o /tmp/toto.out http://zoo-project-dru-rabbitmq:15672"
+CMD="curl -o /tmp/toto.out http://${ZOO_RABBITMQ_HOST}:15672"
 $CMD
 
 if [ -e /tmp/toto.out ]; then echo "Should start" ; else echo wait; sleep 1; $CMD ; fi 
@@ -35,6 +37,7 @@ while [ ! -e /tmp/toto.out ]; do echo wait; sleep 1; $CMD ;  done
 echo "START FPM in 5 seconds"
 
 touch /var/log/zoofpm.log
+chown www-data:www-data /var/log/zoofpm.log
 sleep 5
 
 if [ "$(id -u)" = "0" ]; then

@@ -48,6 +48,7 @@ services:
     volumes:
       - ./docker/main.cfg:/usr/lib/cgi-bin/main.cfg
       - ./docker/oas.cfg:/usr/lib/cgi-bin/oas.cfg
+      - ./docker/startUp.sh:/startUp.sh:ro
       - ./docker/tmp:/tmp/zTmp
       - ./docker/mapserver.conf:/mapserver/etc/mapserver.conf
       - ./docker/com:/usr/com/zoo-project
