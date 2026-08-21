@@ -2,8 +2,10 @@ version: '3'
 services:
   zookernel:
     platform: linux/amd64
-    image: zooproject/zoo-project:latest
-    #build: .
+    image: zoo-project:local
+    build:
+      context: .
+      dockerfile: docker/zookernel-local.Dockerfile
     networks:
       front-tier:
         ipv4_address: 172.16.238.10
@@ -39,7 +41,7 @@ services:
       - MAPSERVER_CONFIG_FILE=/mapserver/etc/mapserver.conf
   zoofpm:
     platform: linux/amd64
-    image: zooproject/zoo-project:latest
+    image: zoo-project:local
     networks:
       front-tier:
         ipv4_address: 172.16.238.11
